@@ -1,8 +1,9 @@
-import pandas as pd
-from pytorch_lightning.callbacks import Callback
-
-from IPython.display import display
 import time
+
+import pandas as pd
+import pytorch_lightning
+from IPython.display import display
+from pytorch_lightning.callbacks import Callback
 
 # TODO: sort train_*, val_*
 # TODO: separate colorings for train_*, val_* changes?
@@ -40,14 +41,38 @@ class ProgressPrinter(Callback):
         self.metrics = []
         self.last_time = 0
         self.display_obj = None
+        self.is_training = False
+
+    def on_train_start(self, trainer, pl_module) -> None:
+        self.is_training = True
+
+    def on_train_end(self, trainer, pl_module) -> None:
+        self.is_training = False
 
     def on_epoch_start(self, trainer, pl_module):
         self.last_time = time.time()
 
-    def on_epoch_end(self, trainer, pl_module):
+    def on_train_epoch_end(self, trainer, pl_module, outputs) -> None:
+        # NOTE: this is due to on_epoch_end currently being called after on_train_epoch_end() 
+        # and on_validation_epoch_end()
+        if trainer.val_dataloaders is None:
+            self.report(trainer)
+
+    def on_validation_epoch_end(self, trainer, pl_module) -> None:
+        # NOTE: this is due to on_epoch_end currently being called after on_train_epoch_end() 
+        # and on_validation_epoch_end()
+        # since this will only be called if validation dataloaders are available, we need to check
+        # if we are in a training cycle to prevent reporting in sanity checking, which also calls on_epoch_end() and on_validation_epoch_end()
+        if self.is_training:
+            self.report(trainer)
+
+    # def on_epoch_end(self, trainer, pl_module: pytorch_lightning.LightningModule) -> None:
+        # pass
+
+    def report(self, trainer):
         raw_metrics = trainer.logged_metrics.copy()
         metrics = {
-            "epoch": raw_metrics.pop("epoch"),
+            "epoch": int(raw_metrics.pop("epoch")),
             # TODO: no mean loss available for in logged metrics, better way?!
             "loss": float(trainer.progress_bar_dict["loss"]) 
         }
