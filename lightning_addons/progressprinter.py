@@ -1,12 +1,11 @@
 import time
+from typing import Any
 
+import numpy as np
 import pandas as pd
-import pytorch_lightning
 from IPython.display import display
+from pytorch_lightning import LightningModule
 from pytorch_lightning.callbacks import Callback
-
-# TODO: sort train_*, val_*
-# TODO: separate colorings for train_*, val_* changes?
 
 
 def format_time(t):
@@ -34,54 +33,59 @@ def improvement_styler(df):
 
 
 class ProgressPrinter(Callback):
-    def __init__(self, highlight_best=True, console=False, log=None):
+    # NOTE: since lightning introduced changes to the callback order on_epoch_* is useless
+    # they are called prior and after each dataset cycle of train, val and test
+    # this is the reason for the somehow akward use of callbacks
+    def __init__(self, highlight_best: bool = True, console: bool = False, log=None):
         self.highlight_best = highlight_best
         self.console = console
         self.log = log
         self.metrics = []
+        self.best_epoch = {"loss": np.inf, "val_loss": np.inf}
         self.last_time = 0
         self.display_obj = None
         self.is_training = False
 
-    def on_train_start(self, trainer, pl_module) -> None:
+    def on_train_start(self, trainer, pl_module: LightningModule) -> None:
         self.is_training = True
 
-    def on_train_end(self, trainer, pl_module) -> None:
+    def on_train_end(self, trainer, pl_module: LightningModule) -> None:
         self.is_training = False
 
-    def on_epoch_start(self, trainer, pl_module):
+    def on_train_epoch_start(self, trainer, pl_module: LightningModule) -> None:
         self.last_time = time.time()
 
-    def on_train_epoch_end(self, trainer, pl_module, outputs) -> None:
-        # NOTE: this is due to on_epoch_end currently being called after on_train_epoch_end() 
-        # and on_validation_epoch_end()
+    def on_train_epoch_end(self, trainer, pl_module: LightningModule, outputs) -> None:
         if trainer.val_dataloaders is None:
             self.report(trainer)
 
-    def on_validation_epoch_end(self, trainer, pl_module) -> None:
-        # NOTE: this is due to on_epoch_end currently being called after on_train_epoch_end() 
-        # and on_validation_epoch_end()
-        # since this will only be called if validation dataloaders are available, we need to check
-        # if we are in a training cycle to prevent reporting in sanity checking, which also calls on_epoch_end() and on_validation_epoch_end()
+    def on_validation_batch_start(
+        self,
+        trainer,
+        pl_module: LightningModule,
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: int,
+    ) -> None:
+        if trainer.train_dataloader is None:
+            self.last_time = time.time()
+
+    def on_validation_epoch_end(self, trainer, pl_module: LightningModule) -> None:
         if self.is_training:
             self.report(trainer)
 
-    # def on_epoch_end(self, trainer, pl_module: pytorch_lightning.LightningModule) -> None:
-        # pass
-
-    def report(self, trainer):
+    def report(self, trainer) -> None:
         raw_metrics = trainer.logged_metrics.copy()
         metrics = {
             "epoch": int(raw_metrics.pop("epoch")),
             # TODO: no mean loss available for in logged metrics, better way?!
-            "loss": float(trainer.progress_bar_dict["loss"]) 
+            "loss": float(trainer.progress_bar_dict["loss"]),
         }
-        if "loss" in raw_metrics:
-            raw_metrics.pop("loss")
-        if "train_loss" in raw_metrics:
-            raw_metrics.pop("train_loss")
-        if "train_loss_epoch" in raw_metrics:
-            raw_metrics.pop("train_loss_epoch")
+
+        ignored_metrics = ["loss", "train_loss", "train_loss_epoch"]
+        for m in ignored_metrics:
+            if m in raw_metrics:
+                raw_metrics.pop(m)
 
         if "val_loss" in raw_metrics:
             metrics["val_loss"] = float(raw_metrics.pop("val_loss"))
@@ -93,6 +97,13 @@ class ProgressPrinter(Callback):
                 metrics[key[6:]] = float(value)
             elif not key.endswith("_step"):
                 metrics[key] = float(value)
+
+        if "val_loss" in metrics:
+            if metrics["val_loss"] < self.best_epoch["val_loss"]:
+                self.best_epoch = metrics
+        else:
+            if metrics["loss"] < self.best_epoch["loss"]:
+                self.best_epoch = metrics
 
         now = time.time()
         elapsed_time = now - self.last_time
@@ -113,7 +124,10 @@ class ProgressPrinter(Callback):
             last_row = metrics_df.iloc[-1]
 
             metrics = {index: last_row[index] for index in last_row.index}
-            metrics = {key: f"{val:.4f}" if isinstance(val, float) else val for key, val in metrics.items()}
+            metrics = {
+                key: f"{val:.4f}" if isinstance(val, float) else val
+                for key, val in metrics.items()
+            }
 
             metrics = ", ".join(
                 [f"{key}: {val}" for key, val in metrics.items() if key != "epoch"]
@@ -123,3 +137,10 @@ class ProgressPrinter(Callback):
                 self.log.info(f"{last_row.name:>{pad}}/{trainer.max_epochs}: {metrics}")
             else:
                 print(f"{last_row.name:>{pad}}/{trainer.max_epochs}: {metrics}")
+
+    def static_report(self, verbose: bool = True) -> pd.DataFrame:
+        metrics_df = pd.DataFrame.from_records([self.best_epoch, self.metrics[-1]])
+        metrics_df.index = ["best", "last"]
+        if verbose:
+            display(metrics_df, display_id=43)
+        return metrics_df

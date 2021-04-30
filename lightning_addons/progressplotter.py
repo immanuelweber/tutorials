@@ -1,14 +1,18 @@
 from collections import defaultdict
 
 import numpy as np
-import pytorch_lightning
 import torch
 from IPython.display import display
 from matplotlib import pyplot as plt
+from pytorch_lightning import LightningModule
 from pytorch_lightning.callbacks import Callback
+from typing import Any
 
 
 class ProgressPlotter(Callback):
+    # NOTE: since lightning introduced changes to the callback order on_epoch_* is useless
+    # they are called prior and after each dataset cycle of train, val and test
+    # this is the reason for the somehow akward use of callbacks
     def __init__(self, highlight_best=True, show_extra_losses=True):
         self.highlight_best = highlight_best
         self.show_extra_losses = show_extra_losses
@@ -22,34 +26,34 @@ class ProgressPlotter(Callback):
         self.did = None
         self.is_training = False
 
-    def on_train_start(self, trainer, pl_module) -> None:
+    def on_train_start(self, trainer, pl_module: LightningModule) -> None:
         self.is_training = True
 
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+    def on_train_batch_end(
+        self,
+        trainer,
+        pl_module: LightningModule,
+        outputs: Any,
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: int,
+    ) -> None:
         self.train_loss.append(float(trainer.progress_bar_dict["loss"]))
 
-    def on_train_end(self, trainer, pl_module) -> None:
+    def on_train_end(self, trainer, pl_module: LightningModule) -> None:
         self.is_training = False
 
-    def on_train_epoch_end(self, trainer, pl_module, outputs) -> None:
-        # NOTE: this is due to on_epoch_end currently being called after on_train_epoch_end() 
-        # and on_validation_epoch_end()
+    def on_train_epoch_end(
+        self, trainer, pl_module: LightningModule, outputs: Any
+    ) -> None:
         if trainer.val_dataloaders is None:
             self.plot(trainer)
 
-    def on_validation_epoch_end(self, trainer, pl_module) -> None:
-        # NOTE: this is due to on_epoch_end currently being called after on_train_epoch_end() 
-        # and on_validation_epoch_end()
-        # since this will only be called if validation dataloaders are available, we need to check
-        # if we are in a training cycle to prevent reporting in sanity checking, which also calls on_epoch_end() and on_validation_epoch_end()
+    def on_validation_epoch_end(self, trainer, pl_module: LightningModule) -> None:
         if self.is_training:
             self.plot(trainer)
 
-    # def on_epoch_end(self, trainer, pl_module: pytorch_lightning.LightningModule) -> None:
-        # pass
-
     def plot(self, trainer):
-
         val_loss = None
         raw_metrics = trainer.logged_metrics.copy()
         raw_metrics.pop("epoch")
