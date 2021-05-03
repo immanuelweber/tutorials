@@ -36,10 +36,10 @@ class ProgressPrinter(Callback):
     # NOTE: since lightning introduced changes to the callback order on_epoch_* is useless
     # they are called prior and after each dataset cycle of train, val and test
     # this is the reason for the somehow akward use of callbacks
-    def __init__(self, highlight_best: bool = True, console: bool = False, log=None):
+    def __init__(self, highlight_best: bool = True, console: bool = False, python_logger=None):
         self.highlight_best = highlight_best
         self.console = console
-        self.log = log
+        self.python_logger = python_logger
         self.metrics = []
         self.best_epoch = {"loss": np.inf, "val_loss": np.inf}
         self.last_time = 0
@@ -133,8 +133,8 @@ class ProgressPrinter(Callback):
                 [f"{key}: {val}" for key, val in metrics.items() if key != "epoch"]
             )
             pad = len(str(trainer.max_epochs))
-            if self.log:
-                self.log.info(f"{last_row.name:>{pad}}/{trainer.max_epochs}: {metrics}")
+            if self.python_logger:
+                self.python_logger.info(f"{last_row.name:>{pad}}/{trainer.max_epochs}: {metrics}")
             else:
                 print(f"{last_row.name:>{pad}}/{trainer.max_epochs}: {metrics}")
 
