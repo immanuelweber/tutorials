@@ -1,3 +1,4 @@
+import random
 import time
 from typing import Any
 
@@ -57,7 +58,7 @@ class ProgressPrinter(Callback):
 
     def on_train_epoch_end(self, trainer, pl_module: LightningModule, outputs) -> None:
         if trainer.val_dataloaders is None:
-            self.report(trainer)
+            self.print(trainer)
 
     def on_validation_batch_start(
         self,
@@ -72,9 +73,9 @@ class ProgressPrinter(Callback):
 
     def on_validation_epoch_end(self, trainer, pl_module: LightningModule) -> None:
         if self.is_training:
-            self.report(trainer)
+            self.print(trainer)
 
-    def report(self, trainer) -> None:
+    def print(self, trainer) -> None:
         raw_metrics = trainer.logged_metrics.copy()
         metrics = {
             "epoch": int(raw_metrics.pop("epoch")),
@@ -117,7 +118,8 @@ class ProgressPrinter(Callback):
                     improvement_styler, axis=None
                 ).hide_index()
             if not self.display_obj:
-                self.display_obj = display(metrics_df, display_id=42)
+                rand_id = random.randint(0, 1e6)
+                self.display_obj = display(metrics_df, display_id=42 + rand_id)
             else:
                 self.display_obj.update(metrics_df)
         else:
@@ -138,9 +140,9 @@ class ProgressPrinter(Callback):
             else:
                 print(f"{last_row.name:>{pad}}/{trainer.max_epochs}: {metrics}")
 
-    def static_report(self, verbose: bool = True) -> pd.DataFrame:
+    def static_print(self, verbose: bool = True) -> pd.DataFrame:
         metrics_df = pd.DataFrame.from_records([self.best_epoch, self.metrics[-1]])
         metrics_df.index = ["best", "last"]
         if verbose:
-            display(metrics_df, display_id=43)
+            display(metrics_df, display_id=43 + random.randint(0, 1e6))
         return metrics_df
