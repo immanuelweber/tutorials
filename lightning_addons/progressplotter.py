@@ -14,6 +14,7 @@ from pytorch_lightning.callbacks import Callback
 
 
 def get_scheduler_names(schedulers):
+    # modified from https://github.com/PyTorchLightning/pytorch-lightning/blob/master/pytorch_lightning/callbacks/lr_monitor.py
     names = []
     for scheduler in schedulers:
         sch = scheduler["scheduler"]
@@ -22,7 +23,7 @@ def get_scheduler_names(schedulers):
         else:
             opt_name = "lr-" + sch.optimizer.__class__.__name__
             i, name = 1, opt_name
-            # Multiple schduler of the same type
+            # Multiple scheduler of the same type
             while True:
                 if name not in names:
                     break
@@ -38,6 +39,7 @@ def get_scheduler_names(schedulers):
 
 
 def get_lrs(schedulers, scheduler_names, interval):
+    # modified from https://github.com/PyTorchLightning/pytorch-lightning/blob/master/pytorch_lightning/callbacks/lr_monitor.py
     latest_stat = {}
 
     for name, scheduler in zip(scheduler_names, schedulers):
