@@ -58,7 +58,9 @@ class ProgressPlotter(Callback):
     # NOTE: since lightning introduced changes to the callback order on_epoch_* is useless
     # they are called prior and after each dataset cycle of train, val and test
     # this is the reason for the somehow akward use of callbacks
-    def __init__(self, highlight_best=True, show_extra_losses=True, show_steps=True):
+    def __init__(
+        self, highlight_best=True, show_extra_losses=True, show_steps=True, show_lr=True
+    ):
         self.highlight_best = highlight_best
         self.best_of = "val"  # not implemented
         self.show_extra_losses = show_extra_losses
@@ -70,7 +72,7 @@ class ProgressPlotter(Callback):
         self.steps = []
         self.did = None
         self.is_training = False
-        self.show_lr = True
+        self.show_lr = show_lr
         self.lrs = defaultdict(list)
         self.lr_color = plt.cm.viridis(0.5)
         self.show_steps = show_steps
