@@ -159,13 +159,13 @@ class ProgressPlotter(Callback):
     ):
         if ax is None:
             fig, ax = plt.subplots()
-        # ax.set_xlabel("step")
         max_steps = max_steps if max_steps else len(self.train_loss)
         step_ax = ax.twiny()
         step_ax.set_xlabel("step")
         step_ax.set_xlim(0, max_steps)
         if not show_steps:
-            step_ax.set_visible(False)
+            step_ax.set_xticks([])
+            step_ax.set_xlabel("")
 
         step_ax.plot(self.train_loss, label="loss")
         ax.set_xlabel("epoch")
@@ -182,7 +182,7 @@ class ProgressPlotter(Callback):
 
         if len(self.extra_metrics) and self.show_extra_losses:
             extra_ax = step_ax.twinx()
-            extra_ax.set_ylabel("extra losses")
+            extra_ax.set_ylabel("extra metrics")
             for key in sorted(self.extra_metrics.keys()):
                 extra_ax.plot(
                     self.steps, self.extra_metrics[key], self.extra_style, label=key
