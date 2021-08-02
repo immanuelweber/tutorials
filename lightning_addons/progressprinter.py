@@ -1,6 +1,5 @@
 import random
 import time
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -34,10 +33,9 @@ def improvement_styler(df):
 
 
 class ProgressPrinter(Callback):
-    # NOTE: since lightning introduced changes to the callback order on_epoch_* is useless
-    # they are called prior and after each dataset cycle of train, val and test
-    # this is the reason for the somehow akward use of callbacks
-    def __init__(self, highlight_best: bool = True, console: bool = False, python_logger=None):
+    def __init__(
+        self, highlight_best: bool = True, console: bool = False, python_logger=None
+    ):
         self.highlight_best = highlight_best
         self.console = console
         self.python_logger = python_logger
@@ -45,40 +43,17 @@ class ProgressPrinter(Callback):
         self.best_epoch = {"loss": np.inf, "val_loss": np.inf}
         self.last_time = 0
         self.display_obj = None
-        self.is_training = False
-
-    def on_train_start(self, trainer, pl_module: LightningModule) -> None:
-        self.is_training = True
-
-    def on_train_end(self, trainer, pl_module: LightningModule) -> None:
-        self.is_training = False
 
     def on_train_epoch_start(self, trainer, pl_module: LightningModule) -> None:
         self.last_time = time.time()
 
     def on_train_epoch_end(self, trainer, pl_module: LightningModule, outputs) -> None:
-        if trainer.val_dataloaders is None:
-            self.print(trainer)
-
-    def on_validation_batch_start(
-        self,
-        trainer,
-        pl_module: LightningModule,
-        batch: Any,
-        batch_idx: int,
-        dataloader_idx: int,
-    ) -> None:
-        if trainer.train_dataloader is None:
-            self.last_time = time.time()
-
-    def on_validation_epoch_end(self, trainer, pl_module: LightningModule) -> None:
-        if self.is_training:
-            self.print(trainer)
+        self.print(trainer)
 
     def print(self, trainer) -> None:
         raw_metrics = trainer.logged_metrics.copy()
         metrics = {
-            "epoch": int(raw_metrics.pop("epoch")),
+            "epoch": trainer.current_epoch,
             # TODO: no mean loss available for in logged metrics, better way?!
             "loss": float(trainer.progress_bar_dict["loss"]),
         }
@@ -136,7 +111,9 @@ class ProgressPrinter(Callback):
             )
             pad = len(str(trainer.max_epochs))
             if self.python_logger:
-                self.python_logger.info(f"{last_row.name:>{pad}}/{trainer.max_epochs}: {metrics}")
+                self.python_logger.info(
+                    f"{last_row.name:>{pad}}/{trainer.max_epochs}: {metrics}"
+                )
             else:
                 print(f"{last_row.name:>{pad}}/{trainer.max_epochs}: {metrics}")
 

@@ -57,9 +57,6 @@ def get_lrs(schedulers, scheduler_names, interval):
 
 
 class ProgressPlotter(Callback):
-    # NOTE: since lightning introduced changes to the callback order on_epoch_* is useless
-    # they are called prior and after each dataset cycle of train, val and test
-    # this is the reason for the somehow akward use of callbacks
     def __init__(
         self, highlight_best=True, show_extra_losses=True, show_steps=True, show_lr=True
     ):
@@ -73,14 +70,12 @@ class ProgressPlotter(Callback):
         self.extra_style = "--"
         self.steps = []
         self.did = None
-        self.is_training = False
         self.show_lr = show_lr
         self.lrs = defaultdict(list)
         self.lr_color = plt.cm.viridis(0.5)
         self.show_steps = show_steps
 
     def on_train_start(self, trainer, pl_module: LightningModule) -> None:
-        self.is_training = True
         self.scheduler_names = get_scheduler_names(trainer.lr_schedulers)
         self.steps_per_epoch = trainer.num_training_batches
 
@@ -98,30 +93,20 @@ class ProgressPlotter(Callback):
         for k, v in lrs.items():
             self.lrs[k].append(v)
 
-    def on_train_end(self, trainer, pl_module: LightningModule) -> None:
-        self.is_training = False
+    def on_train_epoch_start(self, trainer, pl_module) -> None:
+        return super().on_train_epoch_start(trainer, pl_module)
 
     def on_train_epoch_end(
         self, trainer, pl_module: LightningModule, outputs: Any
     ) -> None:
-        if trainer.val_dataloaders is None:
-            self.collect_metrics(trainer)
-            self.update_plot(
-                trainer, self.highlight_best, self.show_lr, self.show_steps
-            )
-
-    def on_validation_epoch_end(self, trainer, pl_module: LightningModule) -> None:
-        if self.is_training:
-            self.collect_metrics(trainer)
-            self.update_plot(
-                trainer, self.highlight_best, self.show_lr, self.show_steps
-            )
+        self.collect_metrics(trainer)
+        self.update_plot(trainer, self.highlight_best, self.show_lr, self.show_steps)
 
     def collect_metrics(self, trainer):
         val_loss = None
         raw_metrics = trainer.logged_metrics.copy()
-        raw_metrics.pop("epoch")
         if "loss" in raw_metrics:
+            # NOTE: we use the progressbar loss value
             raw_metrics.pop("loss")
         if "val_loss" in raw_metrics:
             val_loss = float(raw_metrics.pop("val_loss"))
